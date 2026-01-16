@@ -21,7 +21,7 @@ tmuxを使って複数のAIコーディングエージェントを同時に起�
 ## インストール
 
 ```bash
-git clone https://github.com/yourname/devcrew.git
+git clone https://github.com/jujucub/devcrew.git
 cd devcrew
 ./install.sh
 ```
