@@ -1,0 +1,86 @@
+# DevCrew Configuration
+# このファイルを ~/.devcrew/config にコピーして編集してください
+# Copy this file to ~/.devcrew/config and customize
+
+# ============================================================
+# Agent Commands
+# 各エージェントの起動コマンドを設定
+# ============================================================
+
+# Claude Code CLI
+AGENT_CLAUDE="claude"
+
+# OpenAI Codex CLI
+AGENT_CODEX="codex"
+
+# Google Gemini CLI
+AGENT_GEMINI="gemini"
+
+# Aider
+AGENT_AIDER="aider"
+
+# カスタムエージェント（必要に応じて追加）
+# AGENT_CUSTOM="your-custom-agent-command"
+
+# ============================================================
+# Team Mode (4人構成) - 各役割のエージェント設定
+# ============================================================
+
+# Leader: タスク管理・指示出し
+LEADER_AGENT="claude"
+
+# Coder: 実装担当
+CODER_AGENT="claude"
+
+# Reviewer: コードレビュー
+REVIEWER_AGENT="claude"
+
+# Tester: テスト担当
+TESTER_AGENT="claude"
+
+# ============================================================
+# Duo Mode (2人構成) - 各役割のエージェント設定
+# ============================================================
+
+# Coder: 実装担当
+CODER_DUO_AGENT="claude"
+
+# Reviewer: コードレビュー
+REVIEWER_DUO_AGENT="claude"
+
+# ============================================================
+# Agent Options
+# エージェント起動時の追加オプション
+# ============================================================
+
+# Claude Code用オプション
+CLAUDE_OPTIONS=""
+
+# Codex用オプション
+CODEX_OPTIONS=""
+
+# Gemini用オプション
+GEMINI_OPTIONS=""
+
+# Aider用オプション
+AIDER_OPTIONS=""
+
+# ============================================================
+# 設定例
+# ============================================================
+#
+# 例1: CoderだけCodexを使う
+#   CODER_AGENT="codex"
+#
+# 例2: ReviewerにGeminiを使う
+#   REVIEWER_AGENT="gemini"
+#
+# 例3: 全員異なるエージェント
+#   LEADER_AGENT="claude"
+#   CODER_AGENT="codex"
+#   REVIEWER_AGENT="gemini"
+#   TESTER_AGENT="aider"
+#
+# 例4: Duo modeでClaude + Codex
+#   CODER_DUO_AGENT="claude"
+#   REVIEWER_DUO_AGENT="codex"

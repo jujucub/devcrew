@@ -29,12 +29,32 @@ if ! command -v tmux &> /dev/null; then
 fi
 echo -e "${GREEN}✓ tmux${NC}"
 
-if ! command -v claude &> /dev/null; then
-  echo -e "${YELLOW}⚠ claude is not installed${NC}"
-  echo "  Claude Code CLI is required to run agents"
-  echo "  Install from: https://github.com/anthropics/claude-code"
-else
-  echo -e "${GREEN}✓ claude${NC}"
+# エージェントチェック
+AGENTS_FOUND=0
+if command -v claude &> /dev/null; then
+  echo -e "${GREEN}✓ claude (Claude Code CLI)${NC}"
+  AGENTS_FOUND=$((AGENTS_FOUND + 1))
+fi
+if command -v codex &> /dev/null; then
+  echo -e "${GREEN}✓ codex (OpenAI Codex CLI)${NC}"
+  AGENTS_FOUND=$((AGENTS_FOUND + 1))
+fi
+if command -v gemini &> /dev/null; then
+  echo -e "${GREEN}✓ gemini (Google Gemini CLI)${NC}"
+  AGENTS_FOUND=$((AGENTS_FOUND + 1))
+fi
+if command -v aider &> /dev/null; then
+  echo -e "${GREEN}✓ aider (Aider)${NC}"
+  AGENTS_FOUND=$((AGENTS_FOUND + 1))
+fi
+
+if [ $AGENTS_FOUND -eq 0 ]; then
+  echo -e "${YELLOW}⚠ No coding agents found${NC}"
+  echo "  Install at least one of the following:"
+  echo "    - Claude Code: https://github.com/anthropics/claude-code"
+  echo "    - Codex CLI:   https://github.com/openai/codex"
+  echo "    - Gemini CLI:  https://github.com/google/gemini-cli"
+  echo "    - Aider:       https://github.com/paul-gauthier/aider"
 fi
 
 echo ""
@@ -48,6 +68,17 @@ cp "$SCRIPT_DIR/bin/devcrew" "$DEVCREW_HOME/"
 cp "$SCRIPT_DIR/bin/dc-send" "$DEVCREW_HOME/"
 cp "$SCRIPT_DIR/bin/dc-status" "$DEVCREW_HOME/"
 cp "$SCRIPT_DIR/prompts/"*.md "$DEVCREW_HOME/prompts/"
+
+# 設定ファイル（既存の場合は上書きしない）
+if [ ! -f "$DEVCREW_HOME/config" ]; then
+  cp "$SCRIPT_DIR/config.example" "$DEVCREW_HOME/config"
+  echo -e "${GREEN}✓ Config file created${NC}"
+else
+  echo -e "${YELLOW}✓ Config file preserved (already exists)${NC}"
+fi
+
+# config.exampleもコピー（参照用）
+cp "$SCRIPT_DIR/config.example" "$DEVCREW_HOME/config.example"
 
 # 実行権限
 chmod +x "$DEVCREW_HOME/devcrew"
@@ -95,9 +126,14 @@ echo ""
 echo "Usage:"
 echo "  devcrew          # Start with 4 agents (default)"
 echo "  devcrew -2       # Start with 2 agents"
+echo "  devcrew -c       # Show current configuration"
 echo "  devcrew -h       # Show help"
 echo ""
 echo "Commands:"
 echo "  dc-send <target> <message>  # Send message to agent"
 echo "  dc-status                   # Show agent status"
+echo ""
+echo "Configuration:"
+echo "  Edit ~/.devcrew/config to customize agent assignments"
+echo "  Example: CODER_AGENT=\"codex\""
 echo ""
