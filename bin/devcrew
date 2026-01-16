@@ -73,7 +73,8 @@ get_agent_command() {
       cmd="$AGENT_CODEX"
       options="$CODEX_OPTIONS"
       if [ -f "$prompt_file" ]; then
-        echo "$cmd $options --system-prompt \"\$(cat '$prompt_file')\""
+        # Codex CLIは experimental_instructions_file でシステムプロンプトを上書き
+        echo "$cmd $options --config experimental_instructions_file='$prompt_file'"
       else
         echo "$cmd $options"
       fi
@@ -82,7 +83,8 @@ get_agent_command() {
       cmd="$AGENT_GEMINI"
       options="$GEMINI_OPTIONS"
       if [ -f "$prompt_file" ]; then
-        echo "$cmd $options --system-prompt \"\$(cat '$prompt_file')\""
+        # Gemini CLIは環境変数 GEMINI_SYSTEM_MD でシステムプロンプトを上書き
+        echo "GEMINI_SYSTEM_MD=\"\$(cat '$prompt_file')\" $cmd $options"
       else
         echo "$cmd $options"
       fi
@@ -286,10 +288,16 @@ if [ "$MODE" = "duo" ]; then
 
 else
   # ============ 4人構成 ============
+  # レイアウト: 上にLeader、下にCoder/Reviewer/Tester
+  # +-------------------+
+  # |      Leader       |
+  # +------+------+-----+
+  # |Coder |Revwr |Tester|
+  # +------+------+-----+
   tmux new-session -d -s $SESSION -c "$PROJECT_DIR"
-  tmux split-window -h -t $SESSION -c "$PROJECT_DIR"
-  tmux split-window -v -t $SESSION:0.0 -c "$PROJECT_DIR"
-  tmux split-window -v -t $SESSION:0.2 -c "$PROJECT_DIR"
+  tmux split-window -v -t $SESSION -c "$PROJECT_DIR"           # 上下に分割
+  tmux split-window -h -t $SESSION:0.1 -c "$PROJECT_DIR"       # 下を左右に分割
+  tmux split-window -h -t $SESSION:0.2 -c "$PROJECT_DIR"       # 下右をさらに分割
 
   # エージェント設定の配列
   AGENTS=("$LEADER_AGENT" "$CODER_AGENT" "$REVIEWER_AGENT" "$TESTER_AGENT")
@@ -328,6 +336,9 @@ tmux set -t $SESSION pane-border-format " #{pane_title} "
 # モード情報を環境変数として保存
 tmux set-environment -t $SESSION DEVCREW_MODE "$MODE"
 tmux set-environment -t $SESSION DEVCREW_PROJECT "$PROJECT_DIR"
+
+# 初期フォーカス設定（Team: Leader, Duo: Coder）
+tmux select-pane -t $SESSION:0.0
 
 echo ""
 echo -e "${BLUE}Attaching to session...${NC}"

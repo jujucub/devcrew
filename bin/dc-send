@@ -71,7 +71,21 @@ MODE="${MODE:-team}"
 send_message() {
   local pane=$1
   local name=$2
-  tmux send-keys -t "$pane" "$MESSAGE" Enter
+
+  # マルチラインメッセージ対応: load-buffer + paste-buffer を使用
+  # 一時ファイルを使ってバッファにロード
+  local tmpfile=$(mktemp)
+  echo -n "$MESSAGE" > "$tmpfile"
+  tmux load-buffer -b devcrew_msg "$tmpfile"
+  rm -f "$tmpfile"
+
+  # バッファの内容をペインに貼り付け、Enterを送信
+  tmux paste-buffer -b devcrew_msg -t "$pane"
+  tmux send-keys -t "$pane" Enter
+
+  # バッファをクリア
+  tmux delete-buffer -b devcrew_msg 2>/dev/null || true
+
   echo -e "${GREEN}→ Sent to $name${NC}"
 }
 
