@@ -1,0 +1,98 @@
+#!/bin/bash
+
+SESSION="devcrew"
+
+# 色定義
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# ヘルプ
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  cat << EOF
+Usage: dc-status [OPTIONS]
+
+各エージェントの状態を確認します。
+
+Options:
+  -f, --full    完全な出力を表示（履歴を含む）
+  -l, --lines N 表示する行数を指定 (default: 10)
+  -h, --help    このヘルプを表示
+EOF
+  exit 0
+fi
+
+# オプションパース
+LINES=10
+FULL=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -f|--full)
+      FULL=true
+      LINES=50
+      shift
+      ;;
+    -l|--lines)
+      LINES=$2
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+# セッション確認
+if ! tmux has-session -t $SESSION 2>/dev/null; then
+  echo -e "${RED}Error: devcrew session is not running${NC}"
+  echo "Start with: devcrew"
+  exit 1
+fi
+
+# モード取得
+MODE=$(tmux show-environment -t $SESSION DEVCREW_MODE 2>/dev/null | cut -d= -f2)
+MODE="${MODE:-team}"
+
+PROJECT=$(tmux show-environment -t $SESSION DEVCREW_PROJECT 2>/dev/null | cut -d= -f2)
+PROJECT="${PROJECT:-unknown}"
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  DevCrew Status${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo -e "  Mode    : ${GREEN}$MODE${NC}"
+echo -e "  Project : ${CYAN}$PROJECT${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo ""
+
+if [ "$MODE" = "duo" ]; then
+  ROLES=("Coder" "Reviewer")
+  PANES=(0 1)
+else
+  ROLES=("Leader" "Coder" "Reviewer" "Tester")
+  PANES=(0 1 2 3)
+fi
+
+for i in "${!ROLES[@]}"; do
+  ROLE="${ROLES[$i]}"
+  PANE="${PANES[$i]}"
+
+  echo -e "${YELLOW}┌─────────────────────────────────────────────────────┐${NC}"
+  echo -e "${YELLOW}│ ${ROLE} (Pane ${PANE})${NC}"
+  echo -e "${YELLOW}└─────────────────────────────────────────────────────┘${NC}"
+
+  if [ "$FULL" = true ]; then
+    tmux capture-pane -t $SESSION:0.$PANE -p -S -$LINES | head -$LINES
+  else
+    tmux capture-pane -t $SESSION:0.$PANE -p | tail -$LINES
+  fi
+
+  echo ""
+done
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo -e "  dc-send <target> <message> でメッセージ送信"
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"

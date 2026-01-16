@@ -1,0 +1,207 @@
+#!/bin/bash
+set -e
+
+DEVCREW_HOME="${DEVCREW_HOME:-$HOME/.devcrew}"
+SESSION="devcrew"
+
+# デフォルト値
+MODE="team"  # team(4人) or duo(2人)
+PROJECT_DIR=""
+
+# 色定義
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# ヘルプ
+show_help() {
+  cat << EOF
+Usage: devcrew [OPTIONS] [PROJECT_DIR]
+
+マルチエージェント協調開発環境
+
+Options:
+  -2, --duo     2人構成 (Coder + Reviewer)
+  -4, --team    4人構成 (Leader + Coder + Reviewer + Tester) [default]
+  -k, --kill    既存のdevcrewセッションを終了
+  -h, --help    このヘルプを表示
+
+Examples:
+  devcrew                    # カレントディレクトリで4人構成
+  devcrew -2                 # カレントディレクトリで2人構成
+  devcrew -2 ~/projects/app  # 指定ディレクトリで2人構成
+  devcrew --kill             # セッション終了
+
+Agents:
+  [Team Mode - 4人]
+    Leader   : タスク管理・指示出し
+    Coder    : 実装担当
+    Reviewer : コードレビュー
+    Tester   : テスト担当
+
+  [Duo Mode - 2人]
+    Coder    : 実装担当
+    Reviewer : コードレビュー
+
+Communication:
+  dc-send <target> <message>  # 他エージェントにメッセージ送信
+  dc-status                   # 各エージェントの状態確認
+EOF
+}
+
+# セッション終了
+kill_session() {
+  if tmux has-session -t $SESSION 2>/dev/null; then
+    tmux kill-session -t $SESSION
+    echo -e "${GREEN}✓ devcrew session terminated${NC}"
+  else
+    echo -e "${YELLOW}No active devcrew session found${NC}"
+  fi
+  exit 0
+}
+
+# 引数パース
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -2|--duo)
+      MODE="duo"
+      shift
+      ;;
+    -4|--team)
+      MODE="team"
+      shift
+      ;;
+    -k|--kill)
+      kill_session
+      ;;
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    -*)
+      echo -e "${RED}Unknown option: $1${NC}"
+      show_help
+      exit 1
+      ;;
+    *)
+      PROJECT_DIR="$1"
+      shift
+      ;;
+  esac
+done
+
+# tmux確認
+if ! command -v tmux &> /dev/null; then
+  echo -e "${RED}Error: tmux is not installed${NC}"
+  echo "Install with: brew install tmux"
+  exit 1
+fi
+
+# claude確認
+if ! command -v claude &> /dev/null; then
+  echo -e "${RED}Error: claude is not installed${NC}"
+  echo "Install Claude Code CLI first"
+  exit 1
+fi
+
+# プロジェクトディレクトリ
+PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
+if [ ! -d "$PROJECT_DIR" ]; then
+  echo -e "${RED}Error: Directory not found: $PROJECT_DIR${NC}"
+  exit 1
+fi
+PROJECT_DIR=$(cd "$PROJECT_DIR" && pwd)  # 絶対パスに変換
+PROJECT_NAME=$(basename "$PROJECT_DIR")
+
+# 既存セッション確認
+if tmux has-session -t $SESSION 2>/dev/null; then
+  echo -e "${YELLOW}Existing devcrew session found. Killing it...${NC}"
+  tmux kill-session -t $SESSION
+fi
+
+echo -e "${BLUE}Starting devcrew in ${MODE} mode...${NC}"
+echo -e "Project: ${GREEN}$PROJECT_DIR${NC}"
+echo ""
+
+if [ "$MODE" = "duo" ]; then
+  # ============ 2人構成 ============
+  tmux new-session -d -s $SESSION -c "$PROJECT_DIR"
+  tmux split-window -h -t $SESSION -c "$PROJECT_DIR"
+
+  # ペインタイトル
+  tmux select-pane -t $SESSION:0.0 -T "Coder"
+  tmux select-pane -t $SESSION:0.1 -T "Reviewer"
+
+  # エージェント起動
+  CODER_PROMPT="$DEVCREW_HOME/prompts/coder-duo.md"
+  REVIEWER_PROMPT="$DEVCREW_HOME/prompts/reviewer-duo.md"
+
+  if [ -f "$CODER_PROMPT" ]; then
+    tmux send-keys -t $SESSION:0.0 "claude --system-prompt \"\$(cat '$CODER_PROMPT')\"" Enter
+  else
+    tmux send-keys -t $SESSION:0.0 "claude" Enter
+  fi
+
+  if [ -f "$REVIEWER_PROMPT" ]; then
+    tmux send-keys -t $SESSION:0.1 "claude --system-prompt \"\$(cat '$REVIEWER_PROMPT')\"" Enter
+  else
+    tmux send-keys -t $SESSION:0.1 "claude" Enter
+  fi
+
+  echo -e "${GREEN}✓ Duo mode started${NC}"
+  echo "  Pane 0: Coder"
+  echo "  Pane 1: Reviewer"
+
+else
+  # ============ 4人構成 ============
+  tmux new-session -d -s $SESSION -c "$PROJECT_DIR"
+  tmux split-window -h -t $SESSION -c "$PROJECT_DIR"
+  tmux split-window -v -t $SESSION:0.0 -c "$PROJECT_DIR"
+  tmux split-window -v -t $SESSION:0.2 -c "$PROJECT_DIR"
+
+  # ペインタイトル
+  tmux select-pane -t $SESSION:0.0 -T "Leader"
+  tmux select-pane -t $SESSION:0.1 -T "Coder"
+  tmux select-pane -t $SESSION:0.2 -T "Reviewer"
+  tmux select-pane -t $SESSION:0.3 -T "Tester"
+
+  # エージェント起動
+  ROLES=("leader" "coder" "reviewer" "tester")
+  PANES=(0 1 2 3)
+
+  for i in "${!ROLES[@]}"; do
+    ROLE="${ROLES[$i]}"
+    PANE="${PANES[$i]}"
+    PROMPT_FILE="$DEVCREW_HOME/prompts/${ROLE}.md"
+
+    if [ -f "$PROMPT_FILE" ]; then
+      tmux send-keys -t $SESSION:0.$PANE "claude --system-prompt \"\$(cat '$PROMPT_FILE')\"" Enter
+    else
+      tmux send-keys -t $SESSION:0.$PANE "claude" Enter
+    fi
+  done
+
+  echo -e "${GREEN}✓ Team mode started${NC}"
+  echo "  Pane 0: Leader"
+  echo "  Pane 1: Coder"
+  echo "  Pane 2: Reviewer"
+  echo "  Pane 3: Tester"
+fi
+
+# UI設定
+tmux set -t $SESSION status-left "[$PROJECT_NAME|$MODE] "
+tmux set -t $SESSION pane-border-status top
+tmux set -t $SESSION pane-border-format " #{pane_title} "
+
+# モード情報を環境変数として保存
+tmux set-environment -t $SESSION DEVCREW_MODE "$MODE"
+tmux set-environment -t $SESSION DEVCREW_PROJECT "$PROJECT_DIR"
+
+echo ""
+echo -e "${BLUE}Attaching to session...${NC}"
+echo "Tips: Ctrl+b d to detach, 'devcrew --kill' to terminate"
+echo ""
+
+tmux attach -t $SESSION

@@ -1,0 +1,116 @@
+#!/bin/bash
+
+SESSION="devcrew"
+
+# 色定義
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# ヘルプ
+show_help() {
+  cat << EOF
+Usage: dc-send <target> <message>
+
+他のエージェントにメッセージを送信します。
+
+Targets (Team mode - 4人構成):
+  leader, 0    : リーダーに送信
+  coder, 1     : コーダーに送信
+  reviewer, 2  : レビュアーに送信
+  tester, 3    : テスターに送信
+  all          : 全員に送信
+
+Targets (Duo mode - 2人構成):
+  coder, 0     : コーダーに送信
+  reviewer, 1  : レビュアーに送信
+  all          : 全員に送信
+
+Examples:
+  dc-send coder "UserServiceを実装してください"
+  dc-send reviewer "src/user.ts をレビューお願いします"
+  dc-send all "作業を一時停止してください"
+EOF
+}
+
+# 引数チェック
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  show_help
+  exit 0
+fi
+
+TARGET=$1
+shift
+MESSAGE="$*"
+
+if [ -z "$TARGET" ]; then
+  echo -e "${RED}Error: target is required${NC}"
+  show_help
+  exit 1
+fi
+
+if [ -z "$MESSAGE" ]; then
+  echo -e "${RED}Error: message is required${NC}"
+  show_help
+  exit 1
+fi
+
+# セッション確認
+if ! tmux has-session -t $SESSION 2>/dev/null; then
+  echo -e "${RED}Error: devcrew session is not running${NC}"
+  echo "Start with: devcrew"
+  exit 1
+fi
+
+# セッションのモードを取得
+MODE=$(tmux show-environment -t $SESSION DEVCREW_MODE 2>/dev/null | cut -d= -f2)
+MODE="${MODE:-team}"
+
+# 送信先を解決
+send_message() {
+  local pane=$1
+  local name=$2
+  tmux send-keys -t "$pane" "$MESSAGE" Enter
+  echo -e "${GREEN}→ Sent to $name${NC}"
+}
+
+if [ "$TARGET" = "all" ]; then
+  # 全員に送信
+  if [ "$MODE" = "duo" ]; then
+    send_message "$SESSION:0.0" "Coder"
+    send_message "$SESSION:0.1" "Reviewer"
+  else
+    send_message "$SESSION:0.0" "Leader"
+    send_message "$SESSION:0.1" "Coder"
+    send_message "$SESSION:0.2" "Reviewer"
+    send_message "$SESSION:0.3" "Tester"
+  fi
+else
+  # 個別送信
+  if [ "$MODE" = "duo" ]; then
+    case $TARGET in
+      "coder"|"0")    PANE="$SESSION:0.0"; NAME="Coder" ;;
+      "reviewer"|"1") PANE="$SESSION:0.1"; NAME="Reviewer" ;;
+      *)
+        echo -e "${RED}Unknown target for duo mode: $TARGET${NC}"
+        echo "Available: coder, reviewer (or 0, 1), all"
+        exit 1
+        ;;
+    esac
+  else
+    case $TARGET in
+      "leader"|"0")   PANE="$SESSION:0.0"; NAME="Leader" ;;
+      "coder"|"1")    PANE="$SESSION:0.1"; NAME="Coder" ;;
+      "reviewer"|"2") PANE="$SESSION:0.2"; NAME="Reviewer" ;;
+      "tester"|"3")   PANE="$SESSION:0.3"; NAME="Tester" ;;
+      *)
+        echo -e "${RED}Unknown target for team mode: $TARGET${NC}"
+        echo "Available: leader, coder, reviewer, tester (or 0-3), all"
+        exit 1
+        ;;
+    esac
+  fi
+
+  send_message "$PANE" "$NAME"
+fi
