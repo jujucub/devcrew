@@ -7,6 +7,7 @@ SESSION="devcrew"
 # デフォルト値
 MODE="team"  # team(4人) or duo(2人)
 PROJECT_DIR=""
+PERMISSION_MODE="restricted"  # restricted(dc-*のみ許可) or yolo(全許可)
 
 # 色定義
 RED='\033[0;31m'
@@ -23,8 +24,6 @@ NC='\033[0m' # No Color
 # エージェントコマンド
 AGENT_CLAUDE="claude"
 AGENT_CODEX="codex"
-AGENT_GEMINI="gemini"
-AGENT_AIDER="aider"
 
 # Team Mode (4人構成)
 LEADER_AGENT="claude"
@@ -39,8 +38,6 @@ REVIEWER_DUO_AGENT="claude"
 # エージェントオプション
 CLAUDE_OPTIONS=""
 CODEX_OPTIONS=""
-GEMINI_OPTIONS=""
-AIDER_OPTIONS=""
 
 # ============================================================
 # 設定ファイル読み込み
@@ -51,18 +48,54 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 # ============================================================
+# パーミッション設定を取得
+# ============================================================
+get_permission_options() {
+  local agent_type=$1
+  local role=$2  # leader, coder, reviewer, tester
+
+  # Leaderは常にデフォルト（ユーザー確認）
+  if [ "$role" = "leader" ]; then
+    echo ""
+    return
+  fi
+
+  # yoloモードの場合は全許可
+  if [ "$PERMISSION_MODE" = "yolo" ]; then
+    case $agent_type in
+      "claude") echo "--dangerously-skip-permissions" ;;
+      "codex")  echo "--dangerously-bypass-approvals-and-sandbox" ;;
+      *)        echo "" ;;
+    esac
+    return
+  fi
+
+  # restrictedモードの場合はdc-*コマンドのみ許可
+  case $agent_type in
+    "claude") echo "--allowedTools 'Bash(dc-send*) Bash(dc-status*)'" ;;
+    "codex")  echo "--sandbox workspace-write --ask-for-approval on-request --add-dir $DEVCREW_HOME" ;;
+    *)        echo "" ;;
+  esac
+}
+
+# ============================================================
 # エージェント起動コマンド生成
 # ============================================================
 get_agent_command() {
   local agent_type=$1
   local prompt_file=$2
+  local role=$3
   local cmd=""
   local options=""
+  local perm_options=""
+
+  # パーミッションオプションを取得
+  perm_options=$(get_permission_options "$agent_type" "$role")
 
   case $agent_type in
     "claude")
       cmd="$AGENT_CLAUDE"
-      options="$CLAUDE_OPTIONS"
+      options="$CLAUDE_OPTIONS $perm_options"
       if [ -f "$prompt_file" ]; then
         echo "$cmd $options --system-prompt \"\$(cat '$prompt_file')\""
       else
@@ -71,7 +104,7 @@ get_agent_command() {
       ;;
     "codex")
       cmd="$AGENT_CODEX"
-      options="$CODEX_OPTIONS"
+      options="$CODEX_OPTIONS $perm_options"
       if [ -f "$prompt_file" ]; then
         # Codex CLIは experimental_instructions_file でシステムプロンプトを上書き
         echo "$cmd $options --config experimental_instructions_file='$prompt_file'"
@@ -79,30 +112,11 @@ get_agent_command() {
         echo "$cmd $options"
       fi
       ;;
-    "gemini")
-      cmd="$AGENT_GEMINI"
-      options="$GEMINI_OPTIONS"
-      if [ -f "$prompt_file" ]; then
-        # Gemini CLIは環境変数 GEMINI_SYSTEM_MD でシステムプロンプトを上書き
-        echo "GEMINI_SYSTEM_MD=\"\$(cat '$prompt_file')\" $cmd $options"
-      else
-        echo "$cmd $options"
-      fi
-      ;;
-    "aider")
-      cmd="$AGENT_AIDER"
-      options="$AIDER_OPTIONS"
-      # Aiderはsystem-promptオプションが異なる可能性
-      if [ -f "$prompt_file" ]; then
-        echo "$cmd $options --read '$prompt_file'"
-      else
-        echo "$cmd $options"
-      fi
-      ;;
     *)
       # カスタムエージェント
-      local custom_var="AGENT_${agent_type^^}"
-      cmd="${!custom_var:-$agent_type}"
+      local upper_type=$(echo "$agent_type" | tr '[:lower:]' '[:upper:]')
+      local custom_var="AGENT_${upper_type}"
+      eval "cmd=\${$custom_var:-$agent_type}"
       if [ -f "$prompt_file" ]; then
         echo "$cmd --system-prompt \"\$(cat '$prompt_file')\""
       else
@@ -122,9 +136,17 @@ Usage: devcrew [OPTIONS] [PROJECT_DIR]
 Options:
   -2, --duo       2人構成 (Coder + Reviewer)
   -4, --team      4人構成 (Leader + Coder + Reviewer + Tester) [default]
+  -y, --yolo      全コマンド自動許可モード (危険)
   -c, --config    現在の設定を表示
   -k, --kill      既存のdevcrewセッションを終了
   -h, --help      このヘルプを表示
+
+Permission Modes:
+  [Default - restricted]
+    Leaderのみユーザー確認、他はdc-send/dc-statusのみ許可
+
+  [--yolo]
+    全エージェントが全コマンドを自動実行 (セキュリティ注意)
 
 Examples:
   devcrew                    # カレントディレクトリで4人構成
@@ -147,8 +169,6 @@ Agents:
 Supported Agents:
   claude   : Claude Code CLI
   codex    : OpenAI Codex CLI
-  gemini   : Google Gemini CLI
-  aider    : Aider
 
 Configuration:
   Edit ~/.devcrew/config to customize agent assignments.
@@ -186,8 +206,6 @@ show_config() {
   echo -e "${YELLOW}[Agent Commands]${NC}"
   echo "  claude : $AGENT_CLAUDE"
   echo "  codex  : $AGENT_CODEX"
-  echo "  gemini : $AGENT_GEMINI"
-  echo "  aider  : $AGENT_AIDER"
   echo ""
   echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
 }
@@ -212,6 +230,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -4|--team)
       MODE="team"
+      shift
+      ;;
+    -y|--yolo)
+      PERMISSION_MODE="yolo"
       shift
       ;;
     -c|--config)
@@ -261,6 +283,11 @@ fi
 
 echo -e "${BLUE}Starting devcrew in ${MODE} mode...${NC}"
 echo -e "Project: ${GREEN}$PROJECT_DIR${NC}"
+if [ "$PERMISSION_MODE" = "yolo" ]; then
+  echo -e "Permission: ${RED}YOLO (全自動許可)${NC}"
+else
+  echo -e "Permission: ${GREEN}restricted (dc-*のみ許可)${NC}"
+fi
 echo ""
 
 if [ "$MODE" = "duo" ]; then
@@ -276,8 +303,8 @@ if [ "$MODE" = "duo" ]; then
   CODER_PROMPT="$DEVCREW_HOME/prompts/coder-duo.md"
   REVIEWER_PROMPT="$DEVCREW_HOME/prompts/reviewer-duo.md"
 
-  CODER_CMD=$(get_agent_command "$CODER_DUO_AGENT" "$CODER_PROMPT")
-  REVIEWER_CMD=$(get_agent_command "$REVIEWER_DUO_AGENT" "$REVIEWER_PROMPT")
+  CODER_CMD=$(get_agent_command "$CODER_DUO_AGENT" "$CODER_PROMPT" "coder")
+  REVIEWER_CMD=$(get_agent_command "$REVIEWER_DUO_AGENT" "$REVIEWER_PROMPT" "reviewer")
 
   tmux send-keys -t $SESSION:0.0 "$CODER_CMD" Enter
   tmux send-keys -t $SESSION:0.1 "$REVIEWER_CMD" Enter
@@ -317,7 +344,7 @@ else
     AGENT="${AGENTS[$i]}"
     PROMPT_FILE="$DEVCREW_HOME/prompts/${ROLE}.md"
 
-    CMD=$(get_agent_command "$AGENT" "$PROMPT_FILE")
+    CMD=$(get_agent_command "$AGENT" "$PROMPT_FILE" "$ROLE")
     tmux send-keys -t $SESSION:0.$PANE "$CMD" Enter
   done
 
@@ -336,6 +363,7 @@ tmux set -t $SESSION pane-border-format " #{pane_title} "
 # モード情報を環境変数として保存
 tmux set-environment -t $SESSION DEVCREW_MODE "$MODE"
 tmux set-environment -t $SESSION DEVCREW_PROJECT "$PROJECT_DIR"
+tmux set-environment -t $SESSION DEVCREW_PERMISSION "$PERMISSION_MODE"
 
 # 初期フォーカス設定（Team: Leader, Duo: Coder）
 tmux select-pane -t $SESSION:0.0

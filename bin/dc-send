@@ -81,6 +81,8 @@ send_message() {
 
   # バッファの内容をペインに貼り付け、Enterを送信
   tmux paste-buffer -b devcrew_msg -t "$pane"
+  # paste-bufferの処理完了を待ってからEnterを送信
+  sleep 0.2
   tmux send-keys -t "$pane" Enter
 
   # バッファをクリア
