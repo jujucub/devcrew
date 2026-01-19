@@ -309,6 +309,13 @@ if [ "$MODE" = "duo" ]; then
   tmux send-keys -t $SESSION:0.0 "$CODER_CMD" Enter
   tmux send-keys -t $SESSION:0.1 "$REVIEWER_CMD" Enter
 
+  # yoloモードの場合、Claude Codeのみ確認ダイアログを自動承認
+  if [ "$PERMISSION_MODE" = "yolo" ]; then
+    sleep 2  # ダイアログ表示を待つ
+    [ "$CODER_DUO_AGENT" = "claude" ] && tmux send-keys -t $SESSION:0.0 Down Enter
+    [ "$REVIEWER_DUO_AGENT" = "claude" ] && tmux send-keys -t $SESSION:0.1 Down Enter
+  fi
+
   echo -e "${GREEN}✓ Duo mode started${NC}"
   echo "  Pane 0: Coder    ($CODER_DUO_AGENT)"
   echo "  Pane 1: Reviewer ($REVIEWER_DUO_AGENT)"
@@ -347,6 +354,15 @@ else
     CMD=$(get_agent_command "$AGENT" "$PROMPT_FILE" "$ROLE")
     tmux send-keys -t $SESSION:0.$PANE "$CMD" Enter
   done
+
+  # yoloモードの場合、Claude Codeのみ確認ダイアログを自動承認（Leader以外）
+  if [ "$PERMISSION_MODE" = "yolo" ]; then
+    sleep 2  # ダイアログ表示を待つ
+    # Pane 1: Coder, Pane 2: Reviewer, Pane 3: Tester（Leaderは除く）
+    [ "$CODER_AGENT" = "claude" ] && tmux send-keys -t $SESSION:0.1 Down Enter
+    [ "$REVIEWER_AGENT" = "claude" ] && tmux send-keys -t $SESSION:0.2 Down Enter
+    [ "$TESTER_AGENT" = "claude" ] && tmux send-keys -t $SESSION:0.3 Down Enter
+  fi
 
   echo -e "${GREEN}✓ Team mode started${NC}"
   echo "  Pane 0: Leader   ($LEADER_AGENT)"
