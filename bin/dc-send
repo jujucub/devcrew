@@ -1,12 +1,8 @@
 #!/bin/bash
 
-SESSION="devcrew"
-
-# 色定義
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+# 共通ライブラリ読み込み
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
 
 # ヘルプ
 show_help() {
@@ -45,27 +41,22 @@ shift
 MESSAGE="$*"
 
 if [ -z "$TARGET" ]; then
-  echo -e "${RED}Error: target is required${NC}"
+  Error "target is required"
   show_help
   exit 1
 fi
 
 if [ -z "$MESSAGE" ]; then
-  echo -e "${RED}Error: message is required${NC}"
+  Error "message is required"
   show_help
   exit 1
 fi
 
 # セッション確認
-if ! tmux has-session -t $SESSION 2>/dev/null; then
-  echo -e "${RED}Error: devcrew session is not running${NC}"
-  echo "Start with: devcrew"
-  exit 1
-fi
+RequireSession
 
 # セッションのモードを取得
-MODE=$(tmux show-environment -t $SESSION DEVCREW_MODE 2>/dev/null | cut -d= -f2)
-MODE="${MODE:-team}"
+MODE=$(GetMode)
 
 # 送信先を解決
 send_message() {
@@ -88,7 +79,7 @@ send_message() {
   # バッファをクリア
   tmux delete-buffer -b devcrew_msg 2>/dev/null || true
 
-  echo -e "${GREEN}→ Sent to $name${NC}"
+  Success "→ Sent to $name"
 }
 
 if [ "$TARGET" = "all" ]; then
@@ -109,7 +100,7 @@ else
       "coder"|"0")    PANE="$SESSION:0.0"; NAME="Coder" ;;
       "reviewer"|"1") PANE="$SESSION:0.1"; NAME="Reviewer" ;;
       *)
-        echo -e "${RED}Unknown target for duo mode: $TARGET${NC}"
+        Error "Unknown target for duo mode: $TARGET"
         echo "Available: coder, reviewer (or 0, 1), all"
         exit 1
         ;;
@@ -121,7 +112,7 @@ else
       "reviewer"|"2") PANE="$SESSION:0.2"; NAME="Reviewer" ;;
       "tester"|"3")   PANE="$SESSION:0.3"; NAME="Tester" ;;
       *)
-        echo -e "${RED}Unknown target for team mode: $TARGET${NC}"
+        Error "Unknown target for team mode: $TARGET"
         echo "Available: leader, coder, reviewer, tester (or 0-3), all"
         exit 1
         ;;

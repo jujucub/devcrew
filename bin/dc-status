@@ -1,14 +1,8 @@
 #!/bin/bash
 
-SESSION="devcrew"
-
-# 色定義
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# 共通ライブラリ読み込み
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
 
 # ヘルプ
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
@@ -47,17 +41,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # セッション確認
-if ! tmux has-session -t $SESSION 2>/dev/null; then
-  echo -e "${RED}Error: devcrew session is not running${NC}"
-  echo "Start with: devcrew"
-  exit 1
-fi
+RequireSession
 
 # モード取得
-MODE=$(tmux show-environment -t $SESSION DEVCREW_MODE 2>/dev/null | cut -d= -f2)
-MODE="${MODE:-team}"
+MODE=$(GetMode)
 
-PROJECT=$(tmux show-environment -t $SESSION DEVCREW_PROJECT 2>/dev/null | cut -d= -f2)
+PROJECT=$(tmux show-environment -t "$SESSION" DEVCREW_PROJECT 2>/dev/null | cut -d= -f2)
 PROJECT="${PROJECT:-unknown}"
 
 echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
@@ -85,9 +74,9 @@ for i in "${!ROLES[@]}"; do
   echo -e "${YELLOW}└─────────────────────────────────────────────────────┘${NC}"
 
   if [ "$FULL" = true ]; then
-    tmux capture-pane -t $SESSION:0.$PANE -p -S -$LINES | head -$LINES
+    tmux capture-pane -t "$SESSION:0.$PANE" -p -S -$LINES | head -$LINES
   else
-    tmux capture-pane -t $SESSION:0.$PANE -p | tail -$LINES
+    tmux capture-pane -t "$SESSION:0.$PANE" -p | tail -$LINES
   fi
 
   echo ""
