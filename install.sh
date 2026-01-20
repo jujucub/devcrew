@@ -62,11 +62,16 @@ echo ""
 # ディレクトリ作成
 echo -e "${BLUE}Installing to $DEVCREW_HOME ...${NC}"
 mkdir -p "$DEVCREW_HOME/prompts"
+mkdir -p "$DEVCREW_HOME/lib/bridge"
+mkdir -p "$DEVCREW_HOME/bridge"
 
 # ファイルコピー
 cp "$SCRIPT_DIR/bin/devcrew" "$DEVCREW_HOME/"
 cp "$SCRIPT_DIR/bin/dc-send" "$DEVCREW_HOME/"
 cp "$SCRIPT_DIR/bin/dc-status" "$DEVCREW_HOME/"
+cp "$SCRIPT_DIR/bin/dc-bridge" "$DEVCREW_HOME/"
+cp "$SCRIPT_DIR/bin/lib/common.sh" "$DEVCREW_HOME/lib/"
+cp "$SCRIPT_DIR/bin/lib/bridge/"*.sh "$DEVCREW_HOME/lib/bridge/"
 cp "$SCRIPT_DIR/prompts/"*.md "$DEVCREW_HOME/prompts/"
 
 # 設定ファイル（既存の場合は上書きしない）
@@ -84,6 +89,7 @@ cp "$SCRIPT_DIR/config.example" "$DEVCREW_HOME/config.example"
 chmod +x "$DEVCREW_HOME/devcrew"
 chmod +x "$DEVCREW_HOME/dc-send"
 chmod +x "$DEVCREW_HOME/dc-status"
+chmod +x "$DEVCREW_HOME/dc-bridge"
 
 echo -e "${GREEN}✓ Files installed${NC}"
 
@@ -132,6 +138,8 @@ echo ""
 echo "Commands:"
 echo "  dc-send <target> <message>  # Send message to agent"
 echo "  dc-status                   # Show agent status"
+echo "  dc-bridge start             # Start Bridge (control system)"
+echo "  dc-bridge status            # Show Bridge status"
 echo ""
 echo "Configuration:"
 echo "  Edit ~/.devcrew/config to customize agent assignments"
